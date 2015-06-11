@@ -10,86 +10,78 @@ def PATH_SHARE_CAMERA360 = DEBUG ? PATH_ON_LOCAL : PATH_ON_CI//共享目录的�
 def PATH_DAILY_BUILD = "$PATH_SHARE_CAMERA360/daily_build"
 
 task copyToDaily(type: Copy) {
-  doLast{
-      println "--------- ready copy old apk to daily dir ..."
-      if (!new File(PATH_DAILY_BUILD).isDirectory()) {
-          println "--------- Create the daily dir ..."
-          new File(PATH_DAILY_BUILD).mkdirs()
-      }
+    println "--------- ready copy old apk to daily dir ..."
+    if (!new File(PATH_DAILY_BUILD).isDirectory()) {
+        println "--------- Create the daily dir ..."
+        new File(PATH_DAILY_BUILD).mkdirs()
+    }
 
-      if (!new File(PATH_DAILY_BUILD).isDirectory()) {
-          println "--------- daily dir is not create success ..."
-      } else {
-          println "--------- daily dir creates success ..."
-      }
+    if (!new File(PATH_DAILY_BUILD).isDirectory()) {
+        println "--------- daily dir is not create success ..."
+    } else {
+        println "--------- daily dir creates success ..."
+    }
 
-      String apkFile = '*.apk'
-      println "--------- ready copy old apk to daily dir file : $PATH_DAILY_BUILD"
-      from(PATH_SHARE_CAMERA360) {
-          include apkFile
-      }
-      into PATH_DAILY_BUILD
-  }
+    String apkFile = '*.apk'
+    println "--------- ready copy old apk to daily dir file : $PATH_DAILY_BUILD"
+    from(PATH_SHARE_CAMERA360) {
+        include apkFile
+    }
+    into PATH_DAILY_BUILD
 
 }
 //
 task deleteOldApk(type: Delete) {
-    doLast {
-        new File(PATH_SHARE_CAMERA360).listFiles().each { file ->
-            if (file.isFile()) {
-                println "--------- delete old file : " + file.getAbsolutePath()
-                delete file.getAbsolutePath()
-            }
+    File[] apks = new File(PATH_SHARE_CAMERA360).listFiles(new FilenameFilter() {
+        @Override
+        boolean accept(File dir, String filename) {
+            return filename.endsWith(".apk")
         }
-    }
+    })
 
+    delete apks
 }
 
 //把构建的apk复制到CI服务器的共享目录下
 task copyApk(type: Copy) {
     //解析AndroidManifest.xml 获取版本号，版本名称。
-    doLast {
+    File manifest = new File("$projectDir/AndroidManifest.xml")
 
-        File manifest = new File("$projectDir/AndroidManifest.xml")
-
-        if (!manifest.exists()) {
-            //自动适配工程结构
-            manifest = new File("$projectDir/src/main/AndroidManifest.xml")
-        }
-
-        def xml = new XmlParser().parse(manifest)
-
-        def att = xml.attributes()
-        def versionName
-        def versionCode
-        att.each {
-            if (it.key.toString().contains("versionCode")) {
-                println("versionCode---------------->"+it.value)
-                versionCode = it.value
-            }else if (it.key.toString().contains("versionName")) {
-                println("versionName---------------->"+it.value)
-                versionName = it.value
-            }
-        }
-
-        def date = new Date()
-        def sdf = new SimpleDateFormat("yyMMdd-HHmmss")
-        def dateStr = sdf.format(date)
-        println "--------- copy new apk, set date : $dateStr"
-
-        from("${buildDir}/outputs/apk") {
-            //the name for apk from the project's root dir name
-//        rename getRootDir().getName(), "$APK_HEAD-$dateStr"
-            println "--------- copy new apk, set name : $APK_HEAD-V$versionName-$versionCode-$dateStr"
-            rename getProjectDir().getName(), "$APK_HEAD-V$versionName-$versionCode-$dateStr"
-        }
-
-        into PATH_SHARE_CAMERA360
-        include "*.apk"
-        exclude "*unaligned.apk"
+    if (!manifest.exists()) {
+        //自动适配工程结构
+        manifest = new File("$projectDir/src/main/AndroidManifest.xml")
     }
 
+    def xml = new XmlParser().parse(manifest)
 
+    def att = xml.attributes()
+    def versionName
+    def versionCode
+    att.each {
+        if (it.key.toString().contains("versionCode")) {
+            println("versionCode---------------->"+it.value)
+            versionCode = it.value
+        }else if (it.key.toString().contains("versionName")) {
+            println("versionName---------------->"+it.value)
+            versionName = it.value
+        }
+    }
+
+    def date = new Date()
+    def sdf = new SimpleDateFormat("yyMMdd-HHmmss")
+    def dateStr = sdf.format(date)
+    println "--------- copy new apk, set date : $dateStr"
+
+    from("${buildDir}/outputs/apk") {
+        //the name for apk from the project's root dir name
+//        rename getRootDir().getName(), "$APK_HEAD-$dateStr"
+        println "--------- copy new apk, set name : $APK_HEAD-V$versionName-$versionCode-$dateStr"
+        rename getProjectDir().getName(), "$APK_HEAD-V$versionName-$versionCode-$dateStr"
+    }
+
+    into PATH_SHARE_CAMERA360
+    include "*.apk"
+    exclude "*unaligned.apk"
 }
 
 
@@ -97,8 +89,9 @@ task daily {
     dependsOn assemble, deleteOldApk, copyApk, copyToDaily
 }
 
-daily.mustRunAfter assemble
-daily.mustRunAfter assembleDebug
-
+//daily.mustRunAfter assemble
+//daily.mustRunAfter assembleDebug
+//
 copyToDaily.mustRunAfter copyApk
 copyApk.mustRunAfter deleteOldApk
+
