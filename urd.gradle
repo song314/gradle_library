@@ -1,0 +1,119 @@
+task urd() {
+    doLast {
+        println "----------- auto clean task !!!!!   "
+        cleanRes()
+    }
+}
+
+def cleanRes() {
+    def HashMap<String, HashSet> map = new HashMap<>();
+    def config = new XmlSlurper().parse(new File("$buildDir/outputs/lint-results.xml"))
+    int count = 0;
+    int all = 0;
+    config.children().each {
+        switch (it.'@id') {
+            case "UnusedResources":
+                it.location.each {
+                    String line = it.'@line';
+                    if ("".equals(line) || line.length() <= 0) {
+                        File f = new File(it.'@file'.toString())
+
+                        if (f.delete()) {
+                            count++;
+                            println "delete file : " + it.'@file'
+                        }
+
+                        all++
+//                    println "location line : " + it.location.'@line'
+                    } else {
+                        //
+                        findUnusedString(it, map)
+                    }
+                }
+                break
+        }
+
+    }
+
+
+    deleteUnusedString(map)
+    println "delete unused resouce : " + count + " , all = " + all
+
+    deleteEmptyXmlFile()
+}
+
+
+def deleteUnusedString(map) {
+    def es = map.entrySet()
+    es.each {
+        deleteEach(it.key, it.value)
+    }
+}
+
+def deleteEach(String path, HashSet lineSet) {
+    println "path = " + path + ", lineSet = " + lineSet
+
+    File f = new File(path)
+    ArrayList pids = null
+    int deleteCount = 0;
+    int lineCount = 0;
+    boolean deleteNextLine = false
+    if (f.length() > 0) {
+        pids = new ArrayList()
+        f.eachLine { line ->
+            lineCount++
+            if (deleteNextLine || lineSet.contains(String.valueOf(lineCount))) {
+                deleteNextLine = (line != null && line.indexOf("</") < 0)
+                deleteCount++
+            } else {
+                pids.add(line)
+            }
+        }
+
+        PrintWriter writer = new PrintWriter(f)
+        pids.each { id -> writer.println(id) }
+
+        writer.close()
+    } else {
+        println "------------ ERROR ------- delete res ：" + path
+    }
+
+    println "lineSet.count = " + lineSet.size() + ", deleteCount = " + deleteCount
+}
+
+def findUnusedString(location, map) {
+    String fileStr = location.'@file'.toString();
+    String lineStr = location.'@line'.toString();
+
+//    println "file = " + fileStr + ", line = " + lineStr;
+    HashSet set;
+    if (null == map.get(fileStr)) {
+        set = new HashSet();
+        map.put(fileStr, set)
+    } else {
+        set = map.get(fileStr)
+    }
+    set.add(lineStr)
+}
+
+def deleteEmptyXmlFile() {
+    println ">>>>>>> delete empty xml : start"
+    // Create a file tree with a base directory
+    FileTree tree = fileTree(dir: 'src/main/res')
+// Add include and exclude patterns to the tree
+    tree.include '**/*.xml'
+//    tree.exclude '*.'
+
+    tree.visit { element ->
+        File file = element.file
+        if (file.isFile()) {
+            def xml = new XmlSlurper().parse(file)
+            if ("resources".equals(xml.name()) && xml.children().size() <= 0) {
+                file.delete()
+                println("--- delete empty xml : " + file.absolutePath)
+            }
+        }
+    }
+
+    println "<<<<<<< delete empty xml : end"
+}
